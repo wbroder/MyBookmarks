@@ -56,6 +56,7 @@
 
     html {
       zoom: var(--zoom);
+      overflow: hidden;
     }
 
 
@@ -75,11 +76,43 @@
       background-color: var(--bg);
       color: var(--text);
       font-family: 'DM Sans', sans-serif;
-      min-height: 100vh;
+      height: calc(100vh / var(--zoom));
+      height: calc(100dvh / var(--zoom));
+      min-height: 0;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 56px 24px 60px;
+      padding: 0 24px;
+    }
+
+    /* Only the bookmarks pane scrolls; its controls stay above it. */
+    #page-header {
+      width: 100%;
+      max-width: 660px;
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: clamp(12px, calc(6vh / var(--zoom)), 56px);
+      position: relative;
+      z-index: 10;
+      background: var(--bg);
+    }
+
+    #bookmark-scroll {
+      width: 100%;
+      max-width: 660px;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-bottom: 60px;
+    }
+
+    #bookmark-scroll:focus-visible {
+      outline: 1px solid var(--border);
+      outline-offset: 2px;
     }
 
     /* Thin, unobtrusive scrollbar */
@@ -98,7 +131,7 @@
       font-size: 11px;
       color: var(--text-muted);
       letter-spacing: 0.15em;
-      margin-bottom: 44px;
+      margin-bottom: clamp(12px, calc(5vh / var(--zoom)), 44px);
     }
 
 
@@ -116,6 +149,7 @@
 
     #search {
       flex: 1;
+      min-width: 0;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
@@ -188,12 +222,26 @@
       width: 100%;
       max-width: 660px;
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       gap: 6px;
       margin-bottom: 16px;
+      position: relative;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 4px;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
     }
 
+    #category-filters::-webkit-scrollbar { height: 3px; }
+
     .category-filter {
+      flex: 0 0 auto;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       background: var(--surface);
@@ -1037,6 +1085,8 @@
 </head>
 <body>
 
+  <header id="page-header">
+
   <!-- ============================================================
        STATUS BAR: clock + bookmark count
        ============================================================ -->
@@ -1103,13 +1153,17 @@
   </div>
 
 
+  <div id="category-filters" role="group" aria-label="Filter bookmarks by category"></div>
+  </header>
+
   <!-- ============================================================
        BOOKMARK LIST
        Populated dynamically by JavaScript.
        ============================================================ -->
-  <div id="category-filters" role="group" aria-label="Filter bookmarks by category"></div>
+  <main id="bookmark-scroll" tabindex="0" aria-label="Bookmarks">
   <div id="results"></div>
   <div id="empty">no bookmarks yet — press A to add one</div>
+  </main>
 
 
   <!-- ============================================================
@@ -1951,6 +2005,7 @@
       const options = getCategoryOptions();
       if (!options.some(option => option.key === selectedCategory)) selectedCategory = null;
       const container = document.getElementById('category-filters');
+      const scrollLeft = container.scrollLeft;
       const focusedKey = container.contains(document.activeElement)
         ? document.activeElement.categoryKey : undefined;
       const buttons = options.map(({ key, label }) => {
@@ -1958,15 +2013,40 @@
         button.type = 'button';
         button.className = 'category-filter';
         button.textContent = label;
+        button.title = label;
         button.categoryKey = key;
         button.setAttribute('aria-pressed', String(key === selectedCategory));
         button.addEventListener('click', () => selectCategory(key));
         return button;
       });
       container.replaceChildren(...buttons);
+      container.scrollLeft = scrollLeft;
       if (focusedKey !== undefined) {
-        (buttons.find(button => button.categoryKey === focusedKey) || buttons[0]).focus();
+        (buttons.find(button => button.categoryKey === focusedKey) || buttons[0]).focus({ preventScroll: true });
       }
+      ensureSelectedCategoryVisible();
+    }
+
+    // Scroll only this strip, and only far enough to reveal the selected tab.
+    function ensureSelectedCategoryVisible(behavior = 'smooth') {
+      const container = document.getElementById('category-filters');
+      const selected = Array.from(container.children).find(button => button.categoryKey === selectedCategory);
+      if (!selected || !container.clientWidth) return;
+      const padding = 4;
+      const left = selected.offsetLeft - padding;
+      const right = selected.offsetLeft + selected.offsetWidth + padding;
+      let target = container.scrollLeft;
+      if (left < target) target = left;
+      else if (right > target + container.clientWidth) target = right - container.clientWidth;
+      target = Math.max(0, Math.min(target, container.scrollWidth - container.clientWidth));
+      if (Math.abs(target - container.scrollLeft) < 1) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) behavior = 'auto';
+      container.scrollTo({ left: target, behavior });
+    }
+
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(() => ensureSelectedCategoryVisible('auto'))
+        .observe(document.getElementById('category-filters'));
     }
 
     function selectCategory(key) {
@@ -1979,7 +2059,7 @@
       const index = options.findIndex(option => option.key === selectedCategory);
       selectCategory(options[(index + direction + options.length) % options.length].key);
       if (document.getElementById('category-filters').contains(document.activeElement)) {
-        document.querySelector('.category-filter[aria-pressed="true"]').focus();
+        document.querySelector('.category-filter[aria-pressed="true"]').focus({ preventScroll: true });
       }
     }
 

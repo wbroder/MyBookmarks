@@ -8,7 +8,7 @@ A keyboard-first personal bookmark homepage available as a single local HTML fil
 
 Most browser bookmark managers are designed for pointing and clicking. MyBookmarks is designed for people who prefer to keep their hands on the keyboard — particularly developers who maintain separate bookmarks for DEV, QA, and PROD environments and want to navigate between them quickly.
 
-The page is meant to be set as your browser's homepage or new tab page. You open a tab, type a few characters, and hit Enter. That's it.
+The page is meant to be your bookmark starting point. Open it, type a few characters, and hit Enter.
 
 ---
 
@@ -61,6 +61,8 @@ Press **Ctrl+Shift+E** while a bookmark is highlighted (use ↑↓ to navigate) 
 
 Start typing anywhere on the page — the search bar focuses automatically.
 
+The clock, search bar, shortcut hints, and categories stay pinned above the independently scrolling bookmark list. Keyboard navigation scrolls the highlighted bookmark into view without moving these controls.
+
 - Each space-separated word must appear as an exact substring somewhere in the bookmark's title, URL, tags, category, or environment field.
 - Words can match in any order: `"stack over"` matches `"Stack Overflow"`, `"over stack"` also matches.
 - Typos do **not** match — `"stck"` does not match `"Stack"`.
@@ -71,7 +73,9 @@ Start typing anywhere on the page — the search bar focuses automatically.
 
 Use **← / →** to cycle through categories, or click a category above the results. The list starts with **All**, followed by categories in alphabetical order (ignoring case), and **Uncategorized** last when any bookmarks have no category. Categories differing only in capitalization or surrounding spaces share a filter.
 
-Navigation wraps at either end. Categories remain visible in the same order while searching, including categories with no matches. Your query is preserved when you switch categories, and the first matching bookmark is highlighted. The bookmark count and **current filter** export reflect both filters.
+Categories stay on one horizontal line, with a scrollbar when needed. Selecting an offscreen category scrolls it into view in either direction without moving the search bar or taking focus from it. Scrolling only moves as far as necessary and respects reduced-motion preferences. Long category labels are shortened visually; hover over a tab to see its full label.
+
+Navigation wraps at either end. The category strip keeps the same categories and order while searching, including categories with no matches. Your query is preserved when you switch categories, and the first matching bookmark is highlighted. The bookmark count and **current filter** export reflect both filters.
 
 When the search field has focus and contains text, Left/Right move the text cursor as usual. Click a category or move focus outside the search field to change categories while keeping your query. Modified arrows, such as Alt+Left/Right, retain their usual behavior. Category shortcuts are inactive inside modals.
 
@@ -84,10 +88,12 @@ Press **Esc** to clear a query while keeping the category; press it again to ret
 | `↑` / `↓` | Navigate through results |
 | `←` / `→` | Previous / next category (when search is empty or unfocused) |
 | `↵` | Open highlighted bookmark |
-| `Shift+↵` | Open in a new tab |
+| `Shift+↵` or `Ctrl+Shift+↵` | Open in a new browsing context (tab/window depends on browser settings) |
 | `Esc` | Clear search, then reset category to All; close an open modal |
 | `Ctrl+Shift+A` | Add a new bookmark |
 | `Ctrl+Shift+E` | Edit the highlighted bookmark |
+
+Use **⌘** instead of **Ctrl** for the app's shortcuts on macOS. Hover over **? more shortcuts** for the expanded list, including the browser's **Ctrl/⌘+L** address-bar shortcut. When a category button has keyboard focus, Enter or Space activates that category.
 
 ### Environment Color Coding
 
@@ -108,6 +114,8 @@ This makes it easy to scan a list of same-named services across environments wit
 Open **⚙ → Save bookmarks to**. Use the **browser / JSON file** toggle to choose a destination. File controls only appear under JSON file; browser storage remains active until a file is successfully connected. Both modes are local to your computer and use the same JSON array format, including categories, environments, tags, and icons.
 
 Settings scroll inside the panel, with the title and Close button kept visible. Zoom, both export options, and Import remain available. The storage summary shows bookmark count, size, and location; less common file and deletion actions are expandable.
+
+Storage details live in Settings; there is no persistent file-status label above the bookmarks. To remove every bookmark from the active destination, expand **delete bookmarks…** and choose **clear all bookmarks**, then confirm.
 
 ### Browser storage (default)
 
@@ -132,6 +140,14 @@ The app remembers the connection locally and tries to reopen it on your next vis
 **Switching back:** selecting **browser** copies the displayed collection into browser storage after confirmation, replacing its previous collection. Cancelling keeps JSON file selected. The JSON file remains unchanged and stops receiving edits. Opening a JSON file does not overwrite the existing browser collection. To combine the two collections, export one and use **Import → merge** in the other.
 
 If another tab or program has changed the file since it was loaded, saving stops with a reload message. The app coordinates its own saves across tabs when browser Web Locks are available; avoid editing the same file simultaneously from different browsers or other programs.
+
+#### File permission limitations
+
+Remembering a file connection does not guarantee that the browser will retain editing permission. Reauthorization may be needed on a later visit, even if the file still exists.
+
+A known reported connection error is **“User activation is required to request permission.”** The current app requests write permission after the file picker returns; if the browser does not recognize an active user gesture at that point, connection fails before writing. This is not proof of a workplace policy restriction, and this permission-flow issue has not yet been fixed.
+
+If file access is unreliable, keep using **browser** storage with JSON export/import. You can restore a file manually by opening it in a text editor and pasting its contents into **Import from JSON**. Existing files remain on disk when you switch storage modes.
 
 ## Backup & Restore
 
@@ -207,7 +223,7 @@ These keys live in browser-local `localStorage`, scoped to the profile and page 
 
 ### Tests
 
-Run `node --test tests/bookmarks.test.cjs` with Node.js. The suite runs the actual inline application script in an in-memory DOM/storage harness and simulates file permissions, save failures, reconnects, mode switching, and concurrent tabs. Native Chrome picker/permission dialogs still require browser testing.
+Run `node --test tests/bookmarks.test.cjs` with Node.js. The suite runs the actual inline application script in an in-memory DOM/storage harness. It covers category navigation and horizontal scrolling calculations, search/filter behavior, settings controls, and simulated file permissions, save failures, reconnects, mode switching, and concurrent tabs. These tests do not exercise actual browser layout or native permission dialogs; verify scrolling, zoom, and file access in a real browser as well.
 
 ### Search Algorithm
 
@@ -225,7 +241,7 @@ The search runs across a combined string of: `title + tags + category + env + ur
 
 ### URL Normalization
 
-`normalizeUrl(raw)` is called everywhere a URL is used:
+`normalizeUrl(raw)` handles bookmark form URLs, pasted/dropped URLs, icon-domain input, and URLs parsed from stored/imported bookmark data:
 
 1. Trims whitespace and strips trailing slashes.
 2. If the string already starts with `http://` or `https://`, validates it with `new URL()` and returns it unchanged, or returns `""` if invalid.
@@ -235,11 +251,14 @@ This means users can type `github.com` and the stored URL will be `https://githu
 
 ### Favicon Loading
 
-Each bookmark row renders a favicon `<img>` with:
+For automatic icons, each bookmark row renders a favicon `<img>` with:
+
 - `src` set to `https://www.google.com/s2/favicons?domain={host}&sz=32`
 - `data-url` set to the bookmark's full URL
 
 After each render, `patchFavicons()` attaches an `error` event listener to every favicon image. If the Google service fails, the listener replaces `src` with DuckDuckGo's favicon API (`https://icons.duckduckgo.com/ip3/{host}.ico`). If that also fails, the image is hidden with `visibility: hidden` (preserving layout space).
+
+A stored icon URL is used in place of the automatic source; an explicit empty icon string disables the image.
 
 ### Rendering
 
@@ -252,9 +271,12 @@ After each render, `patchFavicons()` attaches an `error` event listener to every
 
 The first row (`i === 0`) always starts with the `active` class, keeping the keyboard focus on the top result.
 
+The viewport is split between `#page-header` and the scrollable `#bookmark-scroll` pane. `#category-filters` is a separate horizontal scroller inside the header. `ensureSelectedCategoryVisible()` adjusts only that strip's scroll position; a resize observer keeps the selected category visible when its available width changes.
+
 ### Modal System
 
 Both modals (add/edit bookmark and settings) share:
+
 - A `.modal-overlay` div that covers the full viewport
 - An `.open` class toggled by `openX()` / `closeX()` functions
 - A mousedown-origin check to prevent accidental closes when the user selects text inside the modal and releases the mouse outside of it

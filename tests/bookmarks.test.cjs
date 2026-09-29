@@ -18,6 +18,9 @@ function app(options = {}) {
       this.style = { setProperty() {} };
       this.dataset = {};
       this.className = '';
+      this.scrollLeft = 0;
+      this.clientWidth = 0;
+      this.scrollCalls = [];
       this.classes = new Set();
       this.classList = {
         add: name => this.classes.add(name),
@@ -27,7 +30,13 @@ function app(options = {}) {
     }
     addEventListener(type, handler) { this.events[type] = handler; }
     setAttribute(name, value) { this.attributes[name] = value; }
-    replaceChildren(...children) { this.children = children; }
+    replaceChildren(...children) {
+      this.children = children;
+      if (this.layoutCategories) {
+        children.forEach((child, index) => { child.offsetLeft = 4 + index * 80; child.offsetWidth = 74; });
+        this.scrollWidth = children.length * 80 + 2;
+      }
+    }
     appendChild(child) { this.children.push(child); }
     contains(element) { return this.children.includes(element); }
     matches(selector) {
@@ -39,6 +48,7 @@ function app(options = {}) {
     blur() { document.activeElement = document.body; }
     click() { return this.events.click?.({ preventDefault() {} }); }
     scrollIntoView() {}
+    scrollTo(options) { this.scrollCalls.push(options); this.scrollLeft = options.left; }
   }
   const elements = Object.fromEntries([...html.matchAll(/<([\w-]+)[^>]*\bid="([^"]+)"/g)]
     .map(([, tag, id]) => [id, new Element(tag)]));
@@ -92,6 +102,7 @@ function app(options = {}) {
   const window = {
     location: {}, open() { throw Error('Unexpected navigation'); },
     addEventListener() {},
+    matchMedia: () => ({ matches: !!options.reducedMotion }),
   };
   if (options.file) {
     window.showOpenFilePicker = async () => {
@@ -547,4 +558,41 @@ test('one primary file control chooses, reloads, and reconnects; cancellation pr
   assert.equal(a.elements['storage-file-btn'].attributes['aria-pressed'], 'true');
   assert.equal(a.evaluate('storageMode'), 'file');
   assert.doesNotMatch(a.elements['storage-info'].innerHTML, /recommendation|risk|5 MB/);
+});
+
+test('category navigation reveals offscreen tabs in both directions without moving focus from search', () => {
+  const a = app();
+  const strip = a.elements['category-filters'];
+  strip.layoutCategories = true;
+  strip.clientWidth = 180;
+  a.evaluate('runSearch("")');
+  a.key('ArrowRight'); // AI still fits.
+  assert.equal(strip.scrollCalls.length, 0);
+  a.key('ArrowRight'); // Dev is past the right edge.
+  assert.equal(strip.scrollLeft, 62);
+  assert.equal(strip.scrollCalls.at(-1).behavior, 'smooth');
+  a.key('ArrowRight');
+  assert.equal(strip.scrollLeft, 142);
+  a.key('ArrowRight'); // Wrap to All at the left end.
+  assert.equal(strip.scrollLeft, 0);
+  a.key('ArrowLeft'); // Wrap to Work at the right end.
+  assert.equal(strip.scrollLeft, 142);
+  assert.equal(a.document.activeElement, a.elements.search);
+  const count = strip.scrollCalls.length;
+  a.query('gmail');
+  assert.equal(strip.scrollCalls.length, count, 'Typing should not move an already visible category');
+});
+
+test('category reveal respects reduced motion and adjusts to a narrower viewport', () => {
+  const a = app({ reducedMotion: true });
+  const strip = a.elements['category-filters'];
+  strip.layoutCategories = true;
+  strip.clientWidth = 180;
+  a.evaluate('runSearch("")');
+  a.key('ArrowLeft');
+  assert.equal(strip.scrollCalls.at(-1).behavior, 'auto');
+  strip.clientWidth = 120;
+  a.evaluate('ensureSelectedCategoryVisible("auto")');
+  assert.equal(strip.scrollLeft, 202);
+  assert.equal(a.state().selectedCategory, 'work');
 });
