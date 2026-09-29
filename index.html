@@ -215,6 +215,8 @@
       outline-offset: 2px;
     }
 
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
     /* ============================================================
        BOOKMARK LIST
        ============================================================ */
@@ -380,11 +382,15 @@
       z-index: 100;
       align-items: center;
       justify-content: center;
+      padding: 16px;
+      overflow-y: auto;
     }
 
     .modal-overlay.open {
       display: flex;
     }
+
+    html:has(.modal-overlay.open) { overflow: hidden; }
 
     .modal {
       background: var(--surface);
@@ -393,7 +399,10 @@
       padding: 28px;
       width: 100%;
       max-width: 480px;
-      max-height: 90vh;
+      /* Viewport units don't shrink with the app's CSS zoom. */
+      max-height: calc(100vh / var(--zoom) - 32px);
+      max-height: calc(100dvh / var(--zoom) - 32px);
+      min-height: 0;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -407,6 +416,8 @@
       color: var(--accent);
       letter-spacing: 0.08em;
     }
+
+    .modal > * { flex-shrink: 0; }
 
     /* Horizontal rule used inside the bookmark modal */
     .modal-divider {
@@ -788,7 +799,63 @@
     .settings-section {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
+    }
+
+    #settings-overlay .settings-modal {
+      padding: 0;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    .settings-header, .settings-footer { padding: 16px 20px; }
+    .settings-header { border-bottom: 1px solid var(--border); }
+    .settings-footer { border-top: 1px solid var(--border); margin: 0; }
+
+    .settings-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .settings-body > * { flex-shrink: 0; }
+    .settings-body::-webkit-scrollbar { width: 8px; }
+    .settings-body::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 4px; }
+    .settings-body .status:empty { display: none; }
+    .settings-body [hidden] { display: none !important; }
+
+    .storage-toggle {
+      display: flex;
+      padding: 3px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      gap: 4px;
+    }
+
+    .storage-toggle .btn { flex: 1; }
+    .storage-toggle .btn[aria-pressed="true"] {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    #storage-file-controls { display: flex; flex-direction: column; gap: 8px; }
+    .settings-body details summary {
+      cursor: pointer;
+      font: 10px 'Martian Mono', monospace;
+      color: var(--text-muted);
+    }
+    .settings-body details[open] > .settings-row { margin-top: 10px; }
+    .storage-toggle .btn:focus-visible, .settings-body summary:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
 
     .settings-section h3 {
@@ -1143,13 +1210,35 @@
        MODAL: SETTINGS / BACKUP & DATA
        ============================================================ -->
   <div id="settings-overlay" class="modal-overlay">
-    <div class="modal">
+    <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
 
-      <h2>// BACKUP &amp; DATA</h2>
+      <div class="settings-header"><h2 id="settings-title">// SETTINGS</h2></div>
+      <div class="settings-body" id="settings-body" tabindex="0" role="region" aria-label="Settings options">
+
+      <div class="settings-section">
+        <h3 id="storage-toggle-label">SAVE BOOKMARKS TO</h3>
+        <div class="storage-toggle" role="group" aria-labelledby="storage-toggle-label">
+          <button class="btn btn-ghost" id="storage-browser-btn" aria-pressed="true">browser</button>
+          <button class="btn btn-ghost" id="storage-file-btn" aria-pressed="false">JSON file</button>
+        </div>
+        <div id="storage-file-controls" hidden>
+          <div class="settings-row">
+            <button class="btn btn-ghost" id="storage-open-btn">choose JSON file</button>
+          </div>
+          <details id="storage-file-options">
+            <summary id="storage-file-options-label">create a new file…</summary>
+            <div class="settings-row">
+              <button class="btn btn-ghost" id="storage-create-btn">create JSON file</button>
+              <button class="btn btn-ghost" id="storage-change-btn" hidden>choose different file</button>
+            </div>
+          </details>
+        </div>
+        <div id="storage-status" class="status" role="status"></div>
+        <p class="settings-note" id="storage-file-note"></p>
+      </div>
 
       <!-- Storage info -->
       <div class="settings-section">
-        <h3>STORAGE INFO</h3>
         <div class="storage-info" id="storage-info">calculating…</div>
       </div>
 
@@ -1162,18 +1251,11 @@
           <span>large</span>
           <span id="zoom-value">100%</span>
         </div>
-        <p class="settings-note">
-          Saved per machine in localStorage. Each device keeps its own zoom level independently.
-        </p>
       </div>
 
       <!-- Export -->
       <div class="settings-section">
         <h3>EXPORT</h3>
-        <p class="settings-note">
-          Download a JSON backup to keep somewhere safe — a USB drive, private repo, or cloud folder.
-          Use Import below to restore from any backup.
-        </p>
         <div class="settings-row">
           <button class="btn btn-primary" id="export-btn">all bookmarks ↓</button>
           <button class="btn btn-ghost"   id="export-filtered-btn">current filter ↓</button>
@@ -1205,14 +1287,15 @@
       </div>
 
       <!-- Danger zone -->
-      <div class="settings-section">
-        <h3>DANGER ZONE</h3>
+      <details>
+        <summary>delete bookmarks…</summary>
         <div class="settings-row">
           <button class="btn btn-danger" id="clear-btn">clear all bookmarks</button>
         </div>
+      </details>
       </div>
 
-      <div class="modal-actions">
+      <div class="modal-actions settings-footer">
         <button class="btn btn-ghost" id="settings-close">close</button>
       </div>
 
@@ -1239,23 +1322,13 @@
 
     const STORAGE_KEY = 'mybookmarks_v1';
     const ZOOM_KEY    = 'mybookmarks_zoom';
+    const STORAGE_MODE_KEY = 'mybookmarks_storage_mode';
+    const FILE_CACHE_KEY = 'mybookmarks_file_cache';
 
 
     /* ============================================================
-       LOCAL STORAGE HELPERS
-       All persistence goes through these two functions so that
-       error handling is centralized and easy to find.
+       BROWSER STORAGE HELPER
        ============================================================ */
-
-    function loadBookmarksFromStorage() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw === null) return null; // null signals "first run"
-        return JSON.parse(raw);
-      } catch {
-        return []; // corrupted data — start fresh
-      }
-    }
 
     function saveBookmarksToStorage(bookmarkList) {
       try {
@@ -1270,13 +1343,261 @@
 
     /* ============================================================
        APPLICATION STATE
-       These three variables represent the full runtime state.
+       Bookmark view and active storage connection.
        ============================================================ */
 
     let bookmarks    = []; // all bookmarks, sorted
     let filtered     = []; // subset currently displayed (after search)
     let activeIdx    = -1; // keyboard-highlighted row index into `filtered`
     let selectedCategory = null; // null = All, '' = Uncategorized
+
+    let storageMode = 'browser';
+    let storageChoice = null; // Settings preview; selecting file mode doesn't discard browser data.
+    let fileHandle = null;
+    let fileSnapshot = null;
+    let fileReady = false;
+    let storageBusy = false;
+    let storageNotice = '';
+    let connectionRemembered = true;
+
+    // Both storage modes and JSON import/export use the same plain array format.
+    // Reject the entire document if malformed; never silently drop file entries.
+    function parseBookmarkData(raw) {
+      const list = JSON.parse(raw);
+      if (!Array.isArray(list)) throw new Error('Expected a JSON array of bookmarks.');
+      return list.map((bm, index) => {
+        const invalid = () => { throw new Error(`Invalid bookmark at entry ${index + 1}. Check title, URL, category, environment, tags, and icon.`); };
+        if (!bm || typeof bm !== 'object' || Array.isArray(bm) ||
+            typeof bm.title !== 'string' || !bm.title.trim() || typeof bm.url !== 'string') invalid();
+        const url = normalizeUrl(bm.url);
+        if (!url || !/^https?:\/\//i.test(url)) invalid();
+        for (const field of ['category', 'env', 'icon']) {
+          if (bm[field] != null && typeof bm[field] !== 'string') invalid();
+        }
+        if (bm.env && !['prod', 'qa', 'dev'].includes(bm.env.toLowerCase())) invalid();
+        if (bm.tags != null && (!Array.isArray(bm.tags) || bm.tags.some(tag => typeof tag !== 'string'))) invalid();
+        return { ...bm, title: bm.title.trim(), url };
+      });
+    }
+
+    function fileStorageSupported() {
+      return typeof window.showOpenFilePicker === 'function' && typeof window.showSaveFilePicker === 'function';
+    }
+
+    // IndexedDB stores only the file connection, never a cloud database.
+    function fileConnectionStore(handle, write = false) {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open('mybookmarks_files', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('connections');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          db.onversionchange = () => db.close();
+          try {
+            const transaction = db.transaction('connections', write ? 'readwrite' : 'readonly');
+            const objectStore = transaction.objectStore('connections');
+            const result = write ? objectStore.put(handle, 'active') : objectStore.get('active');
+            transaction.oncomplete = () => { db.close(); resolve(result.result); };
+            transaction.onabort = transaction.onerror = () => { db.close(); reject(transaction.error || result.error || new Error('Could not remember the file connection.')); };
+          } catch (error) { db.close(); reject(error); }
+        };
+      });
+    }
+
+    function rememberStorageMode() {
+      // Don't reopen a previously remembered file if remembering a new one failed.
+      const mode = storageMode === 'file' && !connectionRemembered ? 'file-disconnected' : storageMode;
+      try { localStorage.setItem(STORAGE_MODE_KEY, mode); }
+      catch { connectionRemembered = false; }
+    }
+
+    function cacheFileBookmarks() {
+      try { localStorage.setItem(FILE_CACHE_KEY, JSON.stringify(bookmarks)); }
+      catch { /* File remains authoritative even if the optional browser cache is full. */ }
+    }
+
+    function refreshStorageControls() {
+      const supported = fileStorageSupported();
+      const disconnected = storageMode === 'file' && !fileReady;
+      const persistenceNote = !connectionRemembered
+        ? (storageMode === 'file' ? ' — Connection is available for this session only; reopen the file next time.' : ' — Could not remember the storage preference for next time.') : '';
+      document.getElementById('storage-status').textContent = storageBusy ? 'saving / connecting…' : `${storageNotice}${persistenceNote}`;
+      for (const id of ['modal-save', 'modal-delete', 'import-merge-btn', 'import-replace-btn', 'clear-btn']) {
+        document.getElementById(id).disabled = storageBusy || disconnected;
+      }
+      const choice = storageChoice || storageMode;
+      const hasFile = storageMode === 'file' && !!fileHandle;
+      document.getElementById('storage-browser-btn').disabled = storageBusy;
+      document.getElementById('storage-browser-btn').setAttribute('aria-pressed', String(choice === 'browser'));
+      document.getElementById('storage-file-btn').disabled = storageBusy || !supported;
+      document.getElementById('storage-file-btn').setAttribute('aria-pressed', String(choice === 'file'));
+      document.getElementById('storage-file-controls').hidden = choice !== 'file';
+      document.getElementById('storage-open-btn').disabled = storageBusy || !supported;
+      document.getElementById('storage-open-btn').textContent = hasFile ? (fileReady ? 'reload file' : 'reconnect file') : 'choose JSON file';
+      document.getElementById('storage-create-btn').disabled = storageBusy || !supported || disconnected;
+      document.getElementById('storage-change-btn').hidden = !hasFile;
+      document.getElementById('storage-change-btn').disabled = storageBusy || !supported;
+      document.getElementById('storage-file-options-label').textContent = hasFile ? 'new or different file…' : 'create a new file…';
+      document.getElementById('storage-file-note').textContent = !supported
+        ? 'Direct file saving needs a supported browser, such as desktop Chrome or Edge.'
+        : choice === 'browser' ? 'Saved in this browser. Clearing site data removes these bookmarks.'
+        : storageMode !== 'file' ? 'Choose a file to load, or create one from your bookmarks. Browser storage stays active until then.'
+        : disconnected ? 'Reconnect to load the file before editing. Your saved file stays on disk.'
+        : 'Changes save automatically to your file.';
+    }
+
+    async function storageOperation(action) {
+      if (storageBusy) return false;
+      storageBusy = true;
+      storageNotice = '';
+      refreshStorageControls();
+      try {
+        return await action();
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          storageNotice = error.message || 'Storage operation failed. Reconnect the file or try again.';
+          showToast(storageNotice, 'err', 5000);
+        }
+        return false;
+      } finally {
+        storageBusy = false;
+        refreshStorageControls();
+        refreshStorageInfo();
+      }
+    }
+
+    async function requireFileAccess(handle, ask = false) {
+      const options = { mode: 'readwrite' };
+      const permission = ask ? await handle.requestPermission(options) : await handle.queryPermission(options);
+      if (permission !== 'granted') throw new Error('File access needed. Reconnect the file in Settings.');
+    }
+
+    async function readBookmarkFile(handle) {
+      const text = await (await handle.getFile()).text();
+      return { text, list: parseBookmarkData(text) };
+    }
+
+    async function writeBookmarkFile(handle, text) {
+      const stream = await handle.createWritable();
+      try {
+        await stream.write(text);
+        await stream.close();
+      } catch (error) {
+        try { await stream.abort(); } catch { /* Preserve the original write error. */ }
+        throw error;
+      }
+    }
+
+    async function activateBookmarkFile(handle, data) {
+      fileHandle = handle;
+      fileSnapshot = data.text;
+      fileReady = true;
+      storageMode = 'file';
+      storageChoice = 'file';
+      document.getElementById('storage-file-options').open = false;
+      bookmarks = sortBookmarks(data.list);
+      connectionRemembered = true;
+      try { await fileConnectionStore(handle, true); }
+      catch { connectionRemembered = false; }
+      rememberStorageMode();
+      cacheFileBookmarks();
+      runSearch(searchInput.value.trim());
+      return true;
+    }
+
+    function openBookmarkFile() {
+      return storageOperation(async () => {
+        const [handle] = await window.showOpenFilePicker({ multiple: false, types: [{ description: 'Bookmarks JSON', accept: { 'application/json': ['.json'] } }] });
+        await requireFileAccess(handle, true);
+        const data = await readBookmarkFile(handle);
+        // Connecting is read-only: existing file content always wins over local seeds/cache.
+        return activateBookmarkFile(handle, data);
+      });
+    }
+
+    function createBookmarkFile() {
+      return storageOperation(async () => {
+        if (storageMode === 'file' && !fileReady) throw new Error('Reconnect your file before copying its bookmarks.');
+        const handle = await window.showSaveFilePicker({ suggestedName: 'bookmarks.json', types: [{ description: 'Bookmarks JSON', accept: { 'application/json': ['.json'] } }] });
+        await requireFileAccess(handle, true);
+        const existing = await handle.getFile();
+        if (existing.size && !confirm(`Replace the contents of ${handle.name} with the ${bookmarks.length} displayed bookmarks? Choose the file instead to load its contents.`)) return false;
+        const text = JSON.stringify(bookmarks, null, 2);
+        await writeBookmarkFile(handle, text);
+        return activateBookmarkFile(handle, { text, list: bookmarks });
+      });
+    }
+
+    function reconnectBookmarkFile() {
+      if (!fileHandle) return openBookmarkFile();
+      return storageOperation(async () => {
+        fileReady = false;
+        await requireFileAccess(fileHandle, true);
+        return activateBookmarkFile(fileHandle, await readBookmarkFile(fileHandle));
+      });
+    }
+
+    function useBrowserStorage() {
+      return storageOperation(async () => {
+        if (!confirm(`Copy the ${bookmarks.length} displayed bookmarks into browser storage, replacing its previous collection? The JSON file will not be changed.${!fileReady ? ' If this is a cached copy, it may be out of date.' : ''}`)) return false;
+        if (!saveBookmarksToStorage(bookmarks)) throw new Error('Could not save to browser storage. Export a backup or free some space.');
+        storageMode = 'browser';
+        storageChoice = 'browser';
+        connectionRemembered = true;
+        rememberStorageMode();
+        fileHandle = null;
+        fileSnapshot = null;
+        fileReady = false;
+        return true;
+      });
+    }
+
+    // Every mutation goes through this boundary. Update the UI only after saving succeeds.
+    function updateBookmarks(transform) {
+      return storageOperation(async () => {
+        const save = async () => {
+          let current;
+          if (storageMode === 'file') {
+            if (!fileReady || !fileHandle) throw new Error('Reconnect your JSON file before editing bookmarks.');
+            try {
+              await requireFileAccess(fileHandle);
+              const data = await readBookmarkFile(fileHandle);
+              if (data.text !== fileSnapshot) throw new Error('The file changed elsewhere. Reconnect it in Settings before saving.');
+              current = data.list;
+            } catch (error) { fileReady = false; throw error; }
+          } else {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            current = raw === null ? bookmarks : parseBookmarkData(raw);
+          }
+          const next = parseBookmarkData(JSON.stringify(transform([...current])));
+          if (storageMode === 'file') {
+            const text = JSON.stringify(next, null, 2);
+            try { await writeBookmarkFile(fileHandle, text); }
+            catch (error) { fileReady = false; throw error; }
+            fileSnapshot = text;
+          } else if (!saveBookmarksToStorage(next)) {
+            throw new Error('Could not save to browser storage. Export a backup or free some space.');
+          }
+          bookmarks = sortBookmarks(next);
+          if (storageMode === 'file') cacheFileBookmarks();
+          runSearch(searchInput.value.trim());
+          return true;
+        };
+        // Coordinate read/check/write across tabs of this app when Web Locks is available.
+        return typeof navigator !== 'undefined' && navigator.locks
+          ? navigator.locks.request('mybookmarks-save', save) : save();
+      });
+    }
+
+    async function restoreFileStorage() {
+      if (!fileStorageSupported()) { storageNotice = 'File saving is unavailable here. Export the cached list or use browser storage.'; return; }
+      await storageOperation(async () => {
+        fileHandle = await fileConnectionStore();
+        if (!fileHandle) throw new Error('Open your existing JSON file to reconnect.');
+        await requireFileAccess(fileHandle); // Never prompt or write during startup.
+        return activateBookmarkFile(fileHandle, await readBookmarkFile(fileHandle));
+      });
+    }
 
 
     /* ============================================================
@@ -1309,13 +1630,17 @@
        ============================================================ */
 
     function getStoredZoom() {
-      const saved = parseFloat(localStorage.getItem(ZOOM_KEY));
-      return isNaN(saved) ? 100 : Math.min(150, Math.max(70, saved));
+      try {
+        const saved = parseFloat(localStorage.getItem(ZOOM_KEY));
+        return isNaN(saved) ? 100 : Math.min(150, Math.max(70, saved));
+      } catch { return 100; }
     }
 
     function applyZoom(percent, persist = true) {
       document.documentElement.style.setProperty('--zoom', (percent / 100).toFixed(2));
-      if (persist) localStorage.setItem(ZOOM_KEY, percent);
+      if (persist) {
+        try { localStorage.setItem(ZOOM_KEY, percent); } catch { /* Zoom still works for this session. */ }
+      }
     }
 
     function initZoom() {
@@ -1419,7 +1744,9 @@
       return String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     // Wrap matched characters in a highlight span
@@ -2046,6 +2373,7 @@
     let editingBookmark = null;
 
     function openBookmarkModal(idx) {
+      if (storageBusy) return;
       editingBookmark = idx !== null ? filtered[idx] : null;
       iconMode        = 'auto';
       selectedIconUrl = null;
@@ -2100,7 +2428,7 @@
       searchInput.focus();
     }
 
-    function saveBookmark() {
+    async function saveBookmark() {
       const title = document.getElementById('f-title').value.trim();
       const url   = normalizeUrl(document.getElementById('f-url').value);
       const cat   = document.getElementById('f-cat').value.trim();
@@ -2133,44 +2461,34 @@
       }
       // iconMode === 'auto': omit icon field — runtime will auto-fetch
 
-      const current = loadBookmarksFromStorage() || [];
-
-      if (editingBookmark !== null) {
-        // Find the original entry in the unsorted storage array by URL
-        // (URL is the most stable unique identifier)
-        const storageIdx = current.findIndex(b => b.url === editingBookmark.url);
-        if (storageIdx !== -1) {
-          current[storageIdx] = bookmark;   // update in place
+      const original = editingBookmark;
+      const saved = await updateBookmarks(current => {
+        if (original !== null) {
+          // Match the stored entry by its original URL, not its filtered index.
+          const storageIdx = current.findIndex(b => b.url === original.url);
+          if (storageIdx !== -1) current[storageIdx] = bookmark;
+          else current.push(bookmark);
         } else {
-          current.push(bookmark);           // fallback: not found, add as new
+          current.push(bookmark);
         }
-      } else {
-        current.push(bookmark);             // new bookmark
-      }
-
-      const saved = saveBookmarksToStorage(current);
-      if (!saved) {
-        showToast('error: could not save (storage full?)', 'err');
-        return;
-      }
-
-      bookmarks = sortBookmarks(current);
-      runSearch(searchInput.value.trim());
+        return current;
+      });
+      if (!saved) return;
       closeBookmarkModal();
-      showToast(editingBookmark !== null ? '✓ bookmark updated' : '✓ bookmark saved');
+      showToast(original !== null ? '✓ bookmark updated' : '✓ bookmark saved');
     }
 
-    function deleteBookmark() {
+    async function deleteBookmark() {
       if (editingBookmark === null) return;
       if (!confirm('Delete this bookmark?')) return;
 
-      const current    = loadBookmarksFromStorage() || [];
-      const storageIdx = current.findIndex(b => b.url === editingBookmark.url);
-      if (storageIdx !== -1) current.splice(storageIdx, 1);
-
-      saveBookmarksToStorage(current);
-      bookmarks = sortBookmarks(current);
-      runSearch(searchInput.value.trim());
+      const original = editingBookmark;
+      const saved = await updateBookmarks(current => {
+        const storageIdx = current.findIndex(b => b.url === original.url);
+        if (storageIdx !== -1) current.splice(storageIdx, 1);
+        return current;
+      });
+      if (!saved) return;
       closeBookmarkModal();
       showToast('✓ bookmark deleted');
     }
@@ -2336,6 +2654,9 @@
        ============================================================ */
 
     function openSettingsModal() {
+      storageChoice = storageMode;
+      document.getElementById('storage-file-options').open = false;
+      refreshStorageControls();
       // Reset the import area
       document.getElementById('import-area').classList.remove('open');
       document.getElementById('import-text').value = '';
@@ -2349,6 +2670,8 @@
 
       refreshStorageInfo();
       document.getElementById('settings-overlay').classList.add('open');
+      document.getElementById('settings-body').scrollTop = 0;
+      document.getElementById('settings-body').focus();
     }
 
     function closeSettingsModal() {
@@ -2357,23 +2680,37 @@
     }
 
     function refreshStorageInfo() {
-      const raw      = localStorage.getItem(STORAGE_KEY) || '[]';
+      const raw      = JSON.stringify(bookmarks);
       const bytes    = new Blob([raw]).size;
       const usedKb   = (bytes / 1024).toFixed(1);
-      const limitKb  = 5120; // localStorage is typically ~5 MB
-      const usedPct  = ((bytes / (limitKb * 1024)) * 100).toFixed(1);
-
       document.getElementById('storage-info').innerHTML = `
-        bookmarks stored: <span class="ok">${bookmarks.length}</span><br>
-        storage used: <span class="ok">${usedKb} KB</span> of ~5 MB available (${usedPct}%)<br>
-        location: <span class="ok">browser localStorage</span> — survives normal cache clears<br>
-        risk: <span class="warn">lost if Chrome profile is deleted or Chrome is reinstalled</span><br>
-        recommendation: <span class="ok">export a backup regularly</span>
+        <span class="ok">${bookmarks.length} bookmarks</span> · ${usedKb} KB<br>
+        ${storageMode === 'file' ? escapeHtml(fileHandle ? fileHandle.name : 'JSON file — disconnected') : 'browser storage'}
       `;
     }
 
     document.getElementById('settings-btn').addEventListener('click',  openSettingsModal);
     document.getElementById('settings-close').addEventListener('click', closeSettingsModal);
+    document.getElementById('storage-browser-btn').addEventListener('click', async () => {
+      if (storageBusy) return false;
+      const switched = storageMode === 'file' ? await useBrowserStorage() : true;
+      storageChoice = storageMode;
+      refreshStorageControls();
+      return switched;
+    });
+    document.getElementById('storage-file-btn').addEventListener('click', () => {
+      if (storageBusy || !fileStorageSupported()) return;
+      storageChoice = 'file';
+      refreshStorageControls();
+    });
+    document.getElementById('storage-open-btn').addEventListener('click', () => {
+      return storageMode === 'file' && fileHandle ? reconnectBookmarkFile() : openBookmarkFile();
+    });
+    document.getElementById('storage-create-btn').addEventListener('click', createBookmarkFile);
+    document.getElementById('storage-change-btn').addEventListener('click', openBookmarkFile);
+    window.addEventListener('beforeunload', event => {
+      if (storageBusy) { event.preventDefault(); event.returnValue = ''; }
+    });
 
 
     /* ============================================================
@@ -2433,46 +2770,44 @@
     // Parses and validates the pasted JSON — returns an array or null
     function parseImportedJson() {
       const raw = document.getElementById('import-text').value.trim();
-      let parsed;
-
       try {
-        parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) throw new Error('expected a JSON array');
+        return parseBookmarkData(raw);
       } catch (e) {
         setStatus('import-status', 'invalid JSON: ' + e.message, 'err');
         return null;
       }
-
-      const valid = parsed.filter(b => b.title && b.url);
-      if (!valid.length) {
-        setStatus('import-status', 'no valid bookmarks found (each entry needs title + url)', 'err');
-        return null;
-      }
-
-      return valid;
     }
 
-    function finishImport(newList, message) {
-      saveBookmarksToStorage(newList);
-      bookmarks = sortBookmarks(newList);
-      runSearch(searchInput.value.trim());
+    async function finishImport(newList, message) {
+      const saved = await updateBookmarks(typeof newList === 'function' ? newList : () => newList);
+      if (!saved) {
+        setStatus('import-status', storageNotice || 'Another storage operation is in progress.', 'err');
+        return false;
+      }
+      if (typeof message === 'function') message = message();
       setStatus('import-status', message, 'ok');
       refreshStorageInfo();
       setTimeout(() => document.getElementById('import-area').classList.remove('open'), 2000);
+      return true;
     }
 
     document.getElementById('import-merge-btn').addEventListener('click', () => {
       const incoming = parseImportedJson();
       if (!incoming) return;
 
-      const current      = loadBookmarksFromStorage() || [];
-      const existingUrls = new Set(current.map(b => b.url));
-      const newEntries   = incoming.filter(b => !existingUrls.has(b.url));
-      const skipped      = incoming.length - newEntries.length;
-
-      finishImport(
-        [...current, ...newEntries],
-        `✓ imported ${newEntries.length} new bookmark${newEntries.length !== 1 ? 's' : ''} (${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped)`
+      let added = 0;
+      return finishImport(
+        current => {
+          const existingUrls = new Set(current.map(b => b.url));
+          for (const bookmark of incoming) {
+            if (existingUrls.has(bookmark.url)) continue;
+            existingUrls.add(bookmark.url);
+            current.push(bookmark);
+            added++;
+          }
+          return current;
+        },
+        () => `✓ imported ${added} bookmarks (${incoming.length - added} duplicates skipped)`
       );
     });
 
@@ -2482,7 +2817,7 @@
 
       if (!confirm(`Replace ALL ${bookmarks.length} existing bookmarks with ${incoming.length} imported ones?`)) return;
 
-      finishImport(
+      return finishImport(
         incoming,
         `✓ replaced with ${incoming.length} bookmark${incoming.length !== 1 ? 's' : ''}`
       );
@@ -2493,14 +2828,10 @@
        CLEAR ALL BOOKMARKS
        ============================================================ */
 
-    document.getElementById('clear-btn').addEventListener('click', () => {
+    document.getElementById('clear-btn').addEventListener('click', async () => {
       if (!confirm(`Delete all ${bookmarks.length} bookmarks? Export a backup first!`)) return;
 
-      saveBookmarksToStorage([]);
-      bookmarks = [];
-      filtered  = [];
-      runSearch(searchInput.value.trim());
-      refreshStorageInfo();
+      return updateBookmarks(() => []);
     });
 
 
@@ -2511,20 +2842,32 @@
        and renders the initial list.
        ============================================================ */
 
-    (function boot() {
+    const bootReady = (async function boot() {
       initZoom();
-
-      const stored = loadBookmarksFromStorage();
-
-      if (stored === null) {
-        // First run — save and display the seed examples
-        saveBookmarksToStorage(SEED_BOOKMARKS);
-        bookmarks = sortBookmarks(SEED_BOOKMARKS);
-      } else {
-        bookmarks = sortBookmarks(stored);
+      let restoreConnection = false;
+      try {
+        const preference = localStorage.getItem(STORAGE_MODE_KEY);
+        storageMode = preference === 'file' || preference === 'file-disconnected' ? 'file' : 'browser';
+        restoreConnection = preference === 'file';
+        if (storageMode === 'file') {
+          const cached = localStorage.getItem(FILE_CACHE_KEY);
+          bookmarks = cached ? sortBookmarks(parseBookmarkData(cached)) : [];
+        } else {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          bookmarks = sortBookmarks(raw === null ? SEED_BOOKMARKS : parseBookmarkData(raw));
+          if (raw === null && !saveBookmarksToStorage(bookmarks)) throw new Error('Browser storage unavailable. Choose a JSON file or export your bookmarks.');
+        }
+      } catch (error) {
+        storageNotice = 'Could not load browser data. ' + error.message;
       }
-
       runSearch('');
+      refreshStorageControls();
+      refreshStorageInfo();
+      if (storageMode === 'file') {
+        if (restoreConnection) await restoreFileStorage();
+        else storageNotice = 'Open your existing JSON file to reconnect.';
+      }
+      refreshStorageControls();
     })();
 
   </script>

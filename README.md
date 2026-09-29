@@ -1,6 +1,6 @@
 # MyBookmarks
 
-A keyboard-first personal bookmark homepage available as a single local HTML file or on GitHub Pages. No server, account, or extension is required. Your bookmarks are stored in your browser's `localStorage` and stay on your machine.
+A keyboard-first personal bookmark homepage available as a single local HTML file or on GitHub Pages. No account, extension, or backend is required. Keep bookmarks in browser storage or autosave them to a JSON file on your computer.
 
 ---
 
@@ -32,7 +32,7 @@ https://wbroder.github.io/MyBookmarks/
    file:///C:/Users/yourname/Documents/MyBookmarks/index.html
    ```
 
-> **Note:** The local and hosted versions use separate browser storage. Bookmarks added to one do not automatically appear in the other; use Export and Import to move them. The local-file version also has browser security restrictions, so clipboard paste must be initiated with the **paste from clipboard** button. Both versions need an internet connection to load favicons.
+> **Note:** The local and hosted versions use separate browser storage. Use Export/Import to move bookmarks, or connect the same JSON file wherever file access is supported. File permissions are granted separately for each page origin. Clipboard paste uses the **paste from clipboard** button. Fonts and favicons require an internet connection.
 
 ---
 
@@ -103,13 +103,37 @@ This makes it easy to scan a list of same-named services across environments wit
 
 ---
 
+## Storage Options
+
+Open **⚙ → Save bookmarks to**. Use the **browser / JSON file** toggle to choose a destination. File controls only appear under JSON file; browser storage remains active until a file is successfully connected. Both modes are local to your computer and use the same JSON array format, including categories, environments, tags, and icons.
+
+Settings scroll inside the panel, with the title and Close button kept visible. Zoom, both export options, and Import remain available. The storage summary shows bookmark count, size, and location; less common file and deletion actions are expandable.
+
+### Browser storage (default)
+
+Bookmarks stay in the current browser profile's `localStorage`. No file permissions are needed. Clearing only cached images/files normally leaves them intact, but clearing site data or deleting the profile removes them. Export backups regularly.
+
+### Local JSON file
+
+Use desktop Chrome or Edge in a context that supports the File System Access API; the HTTPS GitHub Pages version is the recommended entry point. File buttons are disabled when the API is unavailable. No bookmark data is uploaded to GitHub or a database service.
+
+1. Select **JSON file**, then **choose JSON file** to load an existing collection or exported backup. To copy your current bookmarks into a new `bookmarks.json`, expand **create a new file…** and click **create JSON file**. Once connected, that section becomes **new or different file…** and also offers **choose different file**.
+2. Select a local file and allow editing when the browser asks. Choose **Allow on every visit** when offered; this option may appear on a later visit. See [Chrome's persistent permission behavior](https://developer.chrome.com/blog/persistent-permissions-for-the-file-system-access-api).
+3. Add, edit, delete, import, or clear bookmarks normally. Each successful action saves directly to that file; no new permission prompt is requested for routine changes while access remains granted.
+
+Settings shows the active storage location, saving progress, and any errors. Save errors also appear as toast notifications. A change is only reflected in the list after the save succeeds. Keep the page open until saving finishes.
+
+**Opening and reconnecting never overwrite the file.** They load its contents first, including an intentionally empty `[]` collection. A malformed file is rejected without changing your active collection. Creating a file at an existing nonempty destination requires confirmation before replacing its contents.
+
+The app remembers the connection locally and tries to reopen it on your next visit. If access expires or the file is unavailable, the last cached collection remains available for browsing/export, but file edits are blocked. The same file button changes from **choose JSON file** to **reload file** when connected, or **reconnect file** when access is needed. Click it to approve access if necessary and read the file again. If the connection cannot be remembered, a message explains that you must choose it again next time.
+
+**After clearing site data:** the file remains on disk. Select **JSON file → choose JSON file**, select that same file, and approve access if prompted. Starter bookmarks will not replace its contents.
+
+**Switching back:** selecting **browser** copies the displayed collection into browser storage after confirmation, replacing its previous collection. Cancelling keeps JSON file selected. The JSON file remains unchanged and stops receiving edits. Opening a JSON file does not overwrite the existing browser collection. To combine the two collections, export one and use **Import → merge** in the other.
+
+If another tab or program has changed the file since it was loaded, saving stops with a reload message. The app coordinates its own saves across tabs when browser Web Locks are available; avoid editing the same file simultaneously from different browsers or other programs.
+
 ## Backup & Restore
-
-Your bookmarks are stored in `localStorage` under the key `mybookmarks_v1`. This survives browser cache clears but would be lost if:
-
-- You delete your Chrome profile
-- You reinstall Chrome without exporting your profile
-- You clear "site data" for `file://` in Chrome's privacy settings
 
 **To export a backup:** Click the ⚙ button → Export → "all bookmarks ↓". This downloads a dated `.json` file.
 
@@ -119,7 +143,9 @@ Your bookmarks are stored in `localStorage` under the key `mybookmarks_v1`. This
 - **Merge** — adds new entries, skips any URLs that already exist
 - **Replace all** — wipes existing bookmarks and loads the import
 
-**Recommendation:** Export a backup weekly and save it to a cloud folder, USB drive, or private GitHub repository.
+Import and export work in both storage modes. Import saves to the active destination; exporting only downloads a separate copy and does not switch modes. Invalid entries reject the whole import, and `[]` is a valid empty collection.
+
+**Recommendation:** Keep an occasional separate backup, even in file mode, to recover from accidental edits or deletion.
 
 ---
 
@@ -133,7 +159,7 @@ The page zoom level is saved per machine in localStorage under the key `mybookma
 
 ### Architecture
 
-MyBookmarks is a single self-contained HTML file. There is no build step, no dependencies, no server, and no network requests except for favicon loading. The entire application is:
+MyBookmarks is a single HTML file with no build step, runtime package dependencies, or application server. Bookmark storage stays local; network requests load fonts and favicons. The entire application is:
 
 ```
 index.html
@@ -160,7 +186,7 @@ A bookmark is a plain JavaScript object with the following shape:
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `title` | string | ✅ | Display name |
-| `url` | string | ✅ | Must be a valid `https://` URL |
+| `url` | string | ✅ | HTTP or HTTPS URL; bare domains get an `https://` prefix |
 | `category` | string | — | Shown as a grey badge |
 | `env` | `"prod"` \| `"qa"` \| `"dev"` | — | Controls row color |
 | `tags` | string[] | — | Used by search |
@@ -170,10 +196,18 @@ A bookmark is a plain JavaScript object with the following shape:
 
 | Key | Value | Purpose |
 |---|---|---|
-| `mybookmarks_v1` | JSON array of bookmark objects | All bookmark data |
+| `mybookmarks_v1` | JSON array of bookmark objects | Browser-mode collection |
 | `mybookmarks_zoom` | Number (70–150) | Zoom percentage for this machine |
+| `mybookmarks_storage_mode` | `browser`, `file`, or `file-disconnected` | Active storage preference |
+| `mybookmarks_file_cache` | JSON array of bookmark objects | Last loaded/saved file collection, for read-only use while disconnected |
 
-Both keys live in `localStorage`, which is scoped to the browser profile and the page's origin. The local `file://` version and the hosted `https://wbroder.github.io` version therefore keep separate bookmark collections. Neither collection is shared across machines or browser profiles.
+These keys live in browser-local `localStorage`, scoped to the profile and page origin. File-mode data is authoritative on disk; its browser cache never silently overwrites a reconnected file. A browser-local IndexedDB database, `mybookmarks_files`, stores the selected `FileSystemFileHandle` in `connections/active`. It is only a remembered file connection, not an external database. Clearing site data removes these browser records, not the user-selected file.
+
+`updateBookmarks(transform)` is the shared asynchronous mutation boundary for both modes. File saves check permission and compare current file text with the last loaded snapshot before writing, then await stream closure before updating the UI/cache. Browser saves check storage errors before updating the UI. `parseBookmarkData()` validates both files and pasted imports. File picker and permission requests run only from explicit user actions.
+
+### Tests
+
+Run `node --test tests/bookmarks.test.cjs` with Node.js. The suite runs the actual inline application script in an in-memory DOM/storage harness and simulates file permissions, save failures, reconnects, mode switching, and concurrent tabs. Native Chrome picker/permission dialogs still require browser testing.
 
 ### Search Algorithm
 
@@ -237,17 +271,17 @@ On boot, `initZoom()` reads the saved value (defaulting to 100%) and applies it 
 
 ## Sharing & Privacy
 
-This project can be shared publicly on GitHub — it contains no credentials or personal bookmark data. Bookmarks are stored only in the local browser profile and origin being used. A new local or hosted installation starts with the seed bookmarks and builds its own list from there.
+This project can be shared publicly on GitHub — it contains no credentials or personal bookmark data. Bookmarks are stored in the local browser profile or a user-selected file, with no cloud bookmark sync. A new installation starts with seed bookmarks until you connect a file or import your own list.
 
 The only network requests made by the page are:
 - Google Fonts (for typography, via `@import`)
 - Google Favicon API (`www.google.com/s2/favicons`)
 - DuckDuckGo Favicon API (`icons.duckduckgo.com`)
 
-None of these receive any information about your bookmarks or search queries.
+Favicon services receive the requested bookmark hostname to look up its icon. Search queries and the bookmark collection are not uploaded. Manually selected icons also load from their stored URLs.
 
 ---
 
 ## Seed Bookmarks
 
-On first launch (empty localStorage), the page populates with a small set of example bookmarks defined in `SEED_BOOKMARKS` at the top of the script block. Edit this array directly in the HTML file to change what new users see. After first launch, the seed is ignored — all data comes from localStorage.
+On first launch in browser mode (no stored collection), the page populates with `SEED_BOOKMARKS` from the script. Afterward, data comes from the selected storage mode. File mode never seeds or writes a file during startup or reconnect.

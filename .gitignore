@@ -1,0 +1,3 @@
+# Personal bookmark collections and exported backups are local data.
+/bookmarks.json
+/mybookmarks-*.json
