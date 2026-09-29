@@ -83,12 +83,12 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 0 24px;
+      padding: 0;
     }
 
     /* Only the bookmarks pane scrolls; its controls stay above it. */
     #page-header {
-      width: 100%;
+      width: calc(100% - 48px);
       max-width: 660px;
       flex: 0 0 auto;
       display: flex;
@@ -102,12 +102,13 @@
 
     #bookmark-scroll {
       width: 100%;
-      max-width: 660px;
       flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
+      overflow-x: hidden;
       overscroll-behavior: contain;
-      padding-bottom: 60px;
+      scrollbar-gutter: stable both-edges;
+      padding: 0 24px 60px;
     }
 
     #bookmark-scroll:focus-visible {
@@ -230,11 +231,10 @@
       overflow-y: hidden;
       padding: 4px;
       overscroll-behavior: contain;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border) transparent;
+      scrollbar-width: none;
     }
 
-    #category-filters::-webkit-scrollbar { height: 3px; }
+    #category-filters::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
     .category-filter {
       flex: 0 0 auto;
@@ -272,6 +272,7 @@
     #results {
       width: 100%;
       max-width: 660px;
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
       gap: 2px;
@@ -2099,6 +2100,19 @@
     }
 
     searchInput.addEventListener('input', () => runSearch(searchInput.value.trim()));
+
+    // The full-width pane handles its own wheel events. Forward vertical wheel
+    // input over the pinned header/background without stealing modal or zoom gestures.
+    document.addEventListener('wheel', event => {
+      if (event.defaultPrevented || !event.cancelable || event.ctrlKey || event.metaKey || event.shiftKey ||
+          !event.deltaY || Math.abs(event.deltaX) > Math.abs(event.deltaY) ||
+          document.querySelector('.modal-overlay.open')) return;
+      const pane = document.getElementById('bookmark-scroll');
+      if (pane.contains(event.target)) return;
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? pane.clientHeight : 1;
+      event.preventDefault();
+      pane.scrollBy({ top: event.deltaY * unit, behavior: 'auto' });
+    }, { passive: false });
 
 
 

@@ -19,6 +19,8 @@ function app(options = {}) {
       this.dataset = {};
       this.className = '';
       this.scrollLeft = 0;
+      this.scrollTop = 0;
+      this.clientHeight = 400;
       this.clientWidth = 0;
       this.scrollCalls = [];
       this.classes = new Set();
@@ -38,7 +40,7 @@ function app(options = {}) {
       }
     }
     appendChild(child) { this.children.push(child); }
-    contains(element) { return this.children.includes(element); }
+    contains(element) { return this === element || this.children.some(child => child.contains(element)); }
     matches(selector) {
       return selector === '.category-filter'
         ? this.className === 'category-filter'
@@ -49,6 +51,7 @@ function app(options = {}) {
     click() { return this.events.click?.({ preventDefault() {} }); }
     scrollIntoView() {}
     scrollTo(options) { this.scrollCalls.push(options); this.scrollLeft = options.left; }
+    scrollBy(options) { this.scrollCalls.push(options); this.scrollTop += options.top || 0; }
   }
   const elements = Object.fromEntries([...html.matchAll(/<([\w-]+)[^>]*\bid="([^"]+)"/g)]
     .map(([, tag, id]) => [id, new Element(tag)]));
@@ -595,4 +598,58 @@ test('category reveal respects reduced motion and adjusts to a narrower viewport
   a.evaluate('ensureSelectedCategoryVisible("auto")');
   assert.equal(strip.scrollLeft, 202);
   assert.equal(a.state().selectedCategory, 'work');
+});
+
+function wheel(a, target, overrides = {}) {
+  const event = {
+    target, deltaY: 60, deltaX: 0, deltaMode: 0, cancelable: true,
+    preventDefault() { this.defaultPrevented = true; }, ...overrides,
+  };
+  a.document.wheel(event);
+  return event;
+}
+
+test('vertical wheel input over header, categories, and background scrolls bookmarks', () => {
+  const a = app();
+  const pane = a.elements['bookmark-scroll'];
+  for (const target of [a.document.body, a.elements['page-header'], a.elements.search, a.elements['category-filters'].children[0]]) {
+    const before = pane.scrollTop;
+    assert.equal(wheel(a, target).defaultPrevented, true);
+    assert.equal(pane.scrollTop, before + 60);
+  }
+  wheel(a, a.elements.search, { deltaY: -30 });
+  assert.equal(pane.scrollTop, 210);
+  assert.equal(a.elements['category-filters'].scrollLeft, 0);
+});
+
+test('bookmark pane scrolling stays native, avoiding double scroll', () => {
+  const a = app();
+  const pane = a.elements['bookmark-scroll'];
+  pane.children = [a.elements.results];
+  assert.equal(wheel(a, pane).defaultPrevented, undefined);
+  assert.equal(wheel(a, a.elements.results).defaultPrevented, undefined);
+  assert.equal(pane.scrollCalls.length, 0);
+});
+
+test('wheel forwarding respects modal scrolling, horizontal gestures, and browser zoom', () => {
+  const a = app();
+  for (const overrides of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { deltaX: 80, deltaY: 5 }, { deltaY: 0 }, { cancelable: false }, { defaultPrevented: true }]) {
+    wheel(a, a.elements['category-filters'], overrides);
+  }
+  for (const id of ['settings-overlay', 'modal-overlay']) {
+    a.elements[id].classList.add('open');
+    assert.equal(wheel(a, a.document.body).defaultPrevented, undefined);
+    assert.equal(wheel(a, a.elements['settings-body']).defaultPrevented, undefined);
+    a.elements[id].classList.remove('open');
+  }
+  assert.equal(a.elements['bookmark-scroll'].scrollCalls.length, 0);
+});
+
+test('wheel forwarding converts line and page deltas to scroll distances', () => {
+  const a = app();
+  const pane = a.elements['bookmark-scroll'];
+  wheel(a, a.document.body, { deltaMode: 1, deltaY: 3 });
+  assert.equal(pane.scrollTop, 48);
+  wheel(a, a.document.body, { deltaMode: 2, deltaY: 1 });
+  assert.equal(pane.scrollTop, 448);
 });

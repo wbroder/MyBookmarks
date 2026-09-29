@@ -61,7 +61,7 @@ Press **Ctrl+Shift+E** while a bookmark is highlighted (use ↑↓ to navigate) 
 
 Start typing anywhere on the page — the search bar focuses automatically.
 
-The clock, search bar, shortcut hints, and categories stay pinned above the independently scrolling bookmark list. Keyboard navigation scrolls the highlighted bookmark into view without moving these controls.
+The clock, search bar, shortcut hints, and categories stay pinned above the independently scrolling bookmark list. Scroll vertically anywhere on the main page, including over the header or side margins, to move the bookmarks. The vertical scrollbar sits at the page edge, outside the centered bookmark column. Keyboard navigation scrolls the highlighted bookmark into view without moving the controls. Open modals keep their own scrolling.
 
 - Each space-separated word must appear as an exact substring somewhere in the bookmark's title, URL, tags, category, or environment field.
 - Words can match in any order: `"stack over"` matches `"Stack Overflow"`, `"over stack"` also matches.
@@ -73,7 +73,7 @@ The clock, search bar, shortcut hints, and categories stay pinned above the inde
 
 Use **← / →** to cycle through categories, or click a category above the results. The list starts with **All**, followed by categories in alphabetical order (ignoring case), and **Uncategorized** last when any bookmarks have no category. Categories differing only in capitalization or surrounding spaces share a filter.
 
-Categories stay on one horizontal line, with a scrollbar when needed. Selecting an offscreen category scrolls it into view in either direction without moving the search bar or taking focus from it. Scrolling only moves as far as necessary and respects reduced-motion preferences. Long category labels are shortened visually; hover over a tab to see its full label.
+Categories stay on one horizontal line with the scrollbar hidden. Selecting an offscreen category scrolls it into view in either direction without moving the search bar or taking focus from it. Horizontal trackpad gestures still scroll the strip manually; ordinary vertical scrolling over it moves the bookmarks. Automatic scrolling only moves as far as necessary and respects reduced-motion preferences. Long category labels are shortened visually; hover over a tab to see its full label.
 
 Navigation wraps at either end. The category strip keeps the same categories and order while searching, including categories with no matches. Your query is preserved when you switch categories, and the first matching bookmark is highlighted. The bookmark count and **current filter** export reflect both filters.
 
