@@ -160,6 +160,7 @@
       max-width: 660px;
       margin-bottom: 24px;
       display: flex;
+      flex-wrap: wrap;
       gap: 20px;
       font-family: 'Martian Mono', monospace;
       font-size: 11px;
@@ -182,6 +183,37 @@
       color: var(--text-muted);
     }
 
+
+    #category-filters {
+      width: 100%;
+      max-width: 660px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .category-filter {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text-muted);
+      padding: 5px 10px;
+      font: 11px 'Martian Mono', monospace;
+      cursor: pointer;
+    }
+
+    .category-filter:hover,
+    .category-filter[aria-pressed="true"] {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .category-filter:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
 
     /* ============================================================
        BOOKMARK LIST
@@ -964,6 +996,7 @@
 
   <div id="hint">
     <span class="hint-key" id="hint-navigate"><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+    <span class="hint-key" title="When search is empty or unfocused"><kbd>←</kbd><kbd>→</kbd> category</span>
     <span class="hint-key" id="hint-open"><kbd>↵</kbd> open</span>
     <span class="hint-key"><kbd>Ctrl/⌘</kbd><kbd>L</kbd> <span>focus address bar</span></span>
     <span class="hint-key" id="hint-more">
@@ -972,7 +1005,7 @@
         <div class="shortcut-row">
           <kbd>Esc</kbd>
           <span class="shortcut-dots"></span>
-          <span class="shortcut-label">clear search / close modal</span>
+          <span class="shortcut-label">clear search, then category / close modal</span>
         </div>
         <div class="shortcut-row">
           <kbd>⇧</kbd><kbd>↵</kbd>
@@ -1003,6 +1036,7 @@
        BOOKMARK LIST
        Populated dynamically by JavaScript.
        ============================================================ -->
+  <div id="category-filters" role="group" aria-label="Filter bookmarks by category"></div>
   <div id="results"></div>
   <div id="empty">no bookmarks yet — press A to add one</div>
 
@@ -1238,6 +1272,7 @@
     let bookmarks    = []; // all bookmarks, sorted
     let filtered     = []; // subset currently displayed (after search)
     let activeIdx    = -1; // keyboard-highlighted row index into `filtered`
+    let selectedCategory = null; // null = All, '' = Uncategorized
 
 
     /* ============================================================
@@ -1254,7 +1289,7 @@
 
     function updateBookmarkCount() {
       const query   = document.getElementById('search').value.trim();
-      const display = query
+      const display = query || selectedCategory !== null
         ? `${filtered.length} / ${bookmarks.length}`
         : `${bookmarks.length}`;
       document.getElementById('clock-count').textContent = `  ·  ${display} bookmarks`;
@@ -1544,7 +1579,7 @@
         rows[activeIdx].classList.remove('active');
       }
 
-      activeIdx = Math.max(0, Math.min(newIndex, filtered.length - 1));
+      activeIdx = filtered.length ? Math.max(0, Math.min(newIndex, filtered.length - 1)) : -1;
 
       if (rows[activeIdx]) {
         rows[activeIdx].classList.add('active');
@@ -1561,13 +1596,71 @@
 
     const searchInput = document.getElementById('search');
 
+    function categoryKey(bookmark) {
+      return (bookmark.category || '').trim().toLowerCase();
+    }
+
+    // Build from all bookmarks so typing never changes the navigation order.
+    function getCategoryOptions() {
+      const categories = new Map();
+      for (const bookmark of bookmarks) {
+        const key = categoryKey(bookmark);
+        if (key && !categories.has(key)) categories.set(key, bookmark.category.trim());
+      }
+      const options = [...categories].map(([key, label]) => ({ key, label }))
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+      options.unshift({ key: null, label: 'All' });
+      if (bookmarks.some(bm => categoryKey(bm) === '')) {
+        options.push({ key: '', label: 'Uncategorized' });
+      }
+      return options;
+    }
+
+    function renderCategoryFilters() {
+      const options = getCategoryOptions();
+      if (!options.some(option => option.key === selectedCategory)) selectedCategory = null;
+      const container = document.getElementById('category-filters');
+      const focusedKey = container.contains(document.activeElement)
+        ? document.activeElement.categoryKey : undefined;
+      const buttons = options.map(({ key, label }) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'category-filter';
+        button.textContent = label;
+        button.categoryKey = key;
+        button.setAttribute('aria-pressed', String(key === selectedCategory));
+        button.addEventListener('click', () => selectCategory(key));
+        return button;
+      });
+      container.replaceChildren(...buttons);
+      if (focusedKey !== undefined) {
+        (buttons.find(button => button.categoryKey === focusedKey) || buttons[0]).focus();
+      }
+    }
+
+    function selectCategory(key) {
+      selectedCategory = key;
+      runSearch(searchInput.value.trim());
+    }
+
+    function cycleCategory(direction) {
+      const options = getCategoryOptions();
+      const index = options.findIndex(option => option.key === selectedCategory);
+      selectCategory(options[(index + direction + options.length) % options.length].key);
+      if (document.getElementById('category-filters').contains(document.activeElement)) {
+        document.querySelector('.category-filter[aria-pressed="true"]').focus();
+      }
+    }
+
     function runSearch(query) {
+      renderCategoryFilters();
+      const candidates = bookmarks.filter(bm => selectedCategory === null || categoryKey(bm) === selectedCategory);
       if (!query) {
-        renderBookmarkList(bookmarks, '');
+        renderBookmarkList(candidates, '');
         return;
       }
 
-      const results = bookmarks
+      const results = candidates
         .map(bm => {
           const combined = [bm.title, ...(bm.tags || []), bm.category || '', bm.env || '', bm.url || ''].join(' ');
           const match = scoreSearch(combined, query);
@@ -1609,15 +1702,28 @@
       // ── Inside a modal: only Escape matters ──────────────────
       if (modalOpen) {
         if (e.key === 'Escape') {
+          e.preventDefault();
           closeBookmarkModal();
           closeSettingsModal();
         }
-		preventDefault();
         return;
       }
 
       const ctrl  = e.ctrlKey  || e.metaKey;
       const shift = e.shiftKey;
+
+      // Preserve text editing and browser shortcuts; arrows filter elsewhere.
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !ctrl && !shift && !e.altKey && !e.isComposing) {
+        const focused = document.activeElement;
+        const editingText = focused && (focused.isContentEditable || focused.matches('input, textarea, select'));
+        if (editingText && !(focused === searchInput && searchInput.value === '')) return;
+        e.preventDefault();
+        cycleCategory(e.key === 'ArrowRight' ? 1 : -1);
+        return;
+      }
+
+      // Let category buttons keep their native Enter/Space activation.
+      if (document.activeElement.matches('.category-filter') && (e.key === 'Enter' || e.key === ' ')) return;
 
       // ── Ctrl+Shift+A — open add bookmark modal ────────────────
       if (ctrl && shift && e.key === 'A') {
@@ -1652,8 +1758,10 @@
         return;
       }
 
-      // ── Escape: clear search ──────────────────────────────────
+      // ── Escape: clear the query first, then reset the category ──
       if (e.key === 'Escape') {
+        e.preventDefault();
+        if (!searchInput.value) selectedCategory = null;
         searchInput.value = '';
         runSearch('');
         searchInput.blur();
@@ -2043,7 +2151,7 @@
       }
 
       bookmarks = sortBookmarks(current);
-      renderBookmarkList(bookmarks, searchInput.value.trim());
+      runSearch(searchInput.value.trim());
       closeBookmarkModal();
       showToast(editingBookmark !== null ? '✓ bookmark updated' : '✓ bookmark saved');
     }
@@ -2058,7 +2166,7 @@
 
       saveBookmarksToStorage(current);
       bookmarks = sortBookmarks(current);
-      renderBookmarkList(bookmarks, searchInput.value.trim());
+      runSearch(searchInput.value.trim());
       closeBookmarkModal();
       showToast('✓ bookmark deleted');
     }
@@ -2291,8 +2399,8 @@
     });
 
     document.getElementById('export-filtered-btn').addEventListener('click', () => {
-      const query      = searchInput.value.trim();
-      const exportData = query ? filtered : bookmarks;
+      const hasFilter  = searchInput.value.trim() || selectedCategory !== null;
+      const exportData = filtered;
 
       if (!exportData.length) {
         setStatus('export-status', 'nothing to export', '');
@@ -2300,7 +2408,7 @@
         return;
       }
 
-      downloadAsJson(exportData, query ? 'filtered' : 'backup');
+      downloadAsJson(exportData, hasFilter ? 'filtered' : 'backup');
     });
 
 
@@ -2343,7 +2451,7 @@
     function finishImport(newList, message) {
       saveBookmarksToStorage(newList);
       bookmarks = sortBookmarks(newList);
-      renderBookmarkList(bookmarks, searchInput.value.trim());
+      runSearch(searchInput.value.trim());
       setStatus('import-status', message, 'ok');
       refreshStorageInfo();
       setTimeout(() => document.getElementById('import-area').classList.remove('open'), 2000);
@@ -2387,7 +2495,7 @@
       saveBookmarksToStorage([]);
       bookmarks = [];
       filtered  = [];
-      renderBookmarkList([], '');
+      runSearch(searchInput.value.trim());
       refreshStorageInfo();
     });
 
@@ -2412,7 +2520,7 @@
         bookmarks = sortBookmarks(stored);
       }
 
-      renderBookmarkList(bookmarks, '');
+      runSearch('');
     })();
 
   </script>

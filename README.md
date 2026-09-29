@@ -1,6 +1,6 @@
 # MyBookmarks
 
-A keyboard-first personal bookmark homepage that runs as a single local HTML file. No server, no account, no extension required. Your bookmarks are stored in `localStorage` and stay on your machine.
+A keyboard-first personal bookmark homepage available as a single local HTML file or on GitHub Pages. No server, account, or extension is required. Your bookmarks are stored in your browser's `localStorage` and stay on your machine.
 
 ---
 
@@ -14,16 +14,25 @@ The page is meant to be set as your browser's homepage or new tab page. You open
 
 ## How to Use
 
-### Installation
+### Choose How to Run It
 
-1. Download `index.html` and save it somewhere permanent (e.g. `Documents/MyBookmarks/index.html`).
-2. In Chrome: **Settings → On startup → Open a specific page** → enter the full file path, e.g.:
+#### Hosted version (recommended)
+
+Open [MyBookmarks on GitHub Pages](https://wbroder.github.io/MyBookmarks/). To use it as your startup page in Chrome, go to **Settings → On startup → Open a specific page** and add:
+
+```
+https://wbroder.github.io/MyBookmarks/
+```
+
+#### Local file version
+
+1. Download [index.html](index.html) and save it somewhere permanent, such as `Documents/MyBookmarks/index.html`.
+2. In Chrome, go to **Settings → On startup → Open a specific page** and add the file URL, for example:
    ```
    file:///C:/Users/yourname/Documents/MyBookmarks/index.html
    ```
-3. Open a new tab — you should see the bookmark homepage.
 
-> **Note:** Because the file runs from `file://`, some browser security restrictions apply. Clipboard paste requires a user gesture (the "paste from clipboard" button). Favicons are loaded from Google and DuckDuckGo's public APIs, so an internet connection is needed for icons to appear.
+> **Note:** The local and hosted versions use separate browser storage. Bookmarks added to one do not automatically appear in the other; use Export and Import to move them. The local-file version also has browser security restrictions, so clipboard paste must be initiated with the **paste from clipboard** button. Both versions need an internet connection to load favicons.
 
 ---
 
@@ -58,22 +67,27 @@ Start typing anywhere on the page — the search bar focuses automatically.
 - Matching characters are highlighted in the results.
 - Results are ranked: matches at word boundaries (e.g. the start of a word) score higher than mid-word matches.
 
+### Filtering by Category
+
+Use **← / →** to cycle through categories, or click a category above the results. The list starts with **All**, followed by categories in alphabetical order (ignoring case), and **Uncategorized** last when any bookmarks have no category. Categories differing only in capitalization or surrounding spaces share a filter.
+
+Navigation wraps at either end. Categories remain visible in the same order while searching, including categories with no matches. Your query is preserved when you switch categories, and the first matching bookmark is highlighted. The bookmark count and **current filter** export reflect both filters.
+
+When the search field has focus and contains text, Left/Right move the text cursor as usual. Click a category or move focus outside the search field to change categories while keeping your query. Modified arrows, such as Alt+Left/Right, retain their usual behavior. Category shortcuts are inactive inside modals.
+
+Press **Esc** to clear a query while keeping the category; press it again to return to **All**. Each page load starts on **All**. If editing, deleting, or importing bookmarks removes the selected category, the filter returns to **All** automatically.
+
 ### Keyboard Reference
 
 | Key | Action |
 |---|---|
 | `↑` / `↓` | Navigate through results |
+| `←` / `→` | Previous / next category (when search is empty or unfocused) |
 | `↵` | Open highlighted bookmark |
 | `Shift+↵` | Open in a new tab |
-| `Esc` | Clear search |
+| `Esc` | Clear search, then reset category to All; close an open modal |
 | `Ctrl+Shift+A` | Add a new bookmark |
 | `Ctrl+Shift+E` | Edit the highlighted bookmark |
-| `PgDn` | Switch to Google search mode |
-| `PgUp` | Switch back to bookmark search mode |
-
-### Google Search Mode
-
-Press **PgDn** to switch the search bar into Google mode. The placeholder changes and the mode indicator in the top bar updates. Pressing Enter sends your query to Google in the current tab. Press **PgUp** or **Esc** to return to bookmark search.
 
 ### Environment Color Coding
 
@@ -99,7 +113,7 @@ Your bookmarks are stored in `localStorage` under the key `mybookmarks_v1`. This
 
 **To export a backup:** Click the ⚙ button → Export → "all bookmarks ↓". This downloads a dated `.json` file.
 
-**To export only the current search results:** Run a search first, then click "current filter ↓".
+**To export only the current results:** Select a category and/or run a search, then click "current filter ↓".
 
 **To restore from a backup:** Click ⚙ → Import → paste the JSON array → choose:
 - **Merge** — adds new entries, skips any URLs that already exist
@@ -159,7 +173,7 @@ A bookmark is a plain JavaScript object with the following shape:
 | `mybookmarks_v1` | JSON array of bookmark objects | All bookmark data |
 | `mybookmarks_zoom` | Number (70–150) | Zoom percentage for this machine |
 
-Both keys live in `localStorage` scoped to the `file://` origin. Because `localStorage` is per-origin and `file://` treats every file path as the same origin in Chrome, the data is accessible from any `file://` page on the same machine — but not shared across machines or browser profiles.
+Both keys live in `localStorage`, which is scoped to the browser profile and the page's origin. The local `file://` version and the hosted `https://wbroder.github.io` version therefore keep separate bookmark collections. Neither collection is shared across machines or browser profiles.
 
 ### Search Algorithm
 
@@ -213,15 +227,6 @@ Both modals (add/edit bookmark and settings) share:
 
 The mousedown check works by recording whether `mousedown` fired on the backdrop itself (not the modal inner div). The `click` handler only closes the modal if that flag is true.
 
-### Search Mode
-
-A `searchMode` variable tracks whether the page is in `'bookmarks'` or `'google'` mode.
-
-- In **bookmarks** mode: typing runs `runSearch()` live and Enter opens the highlighted bookmark.
-- In **google** mode: typing does not affect the bookmark list. Enter opens `https://www.google.com/search?q={query}` in the current tab.
-
-`PgDn` switches to Google mode. `PgUp` or `Esc` switches back.
-
 ### Zoom
 
 `applyZoom(percent)` sets the CSS custom property `--zoom` on `document.documentElement`, which is picked up by `html { zoom: var(--zoom); }`. The value is also saved to `localStorage` immediately.
@@ -232,7 +237,7 @@ On boot, `initZoom()` reads the saved value (defaulting to 100%) and applies it 
 
 ## Sharing & Privacy
 
-This file can be shared publicly on GitHub — it contains no credentials, no personal data, and no hardcoded bookmarks (those are stored only in your local browser). Anyone who downloads the file starts with the seed bookmarks and builds their own list from scratch.
+This project can be shared publicly on GitHub — it contains no credentials or personal bookmark data. Bookmarks are stored only in the local browser profile and origin being used. A new local or hosted installation starts with the seed bookmarks and builds its own list from there.
 
 The only network requests made by the page are:
 - Google Fonts (for typography, via `@import`)
