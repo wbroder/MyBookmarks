@@ -77,7 +77,7 @@ Categories stay on one horizontal line with the scrollbar hidden. Selecting an o
 
 Navigation wraps at either end. The category strip keeps the same categories and order while searching, including categories with no matches. Your query is preserved when you switch categories, and the first matching bookmark is highlighted. The bookmark count and **current filter** export reflect both filters.
 
-When the search field has focus and contains text, Left/Right move the text cursor as usual. Click a category or move focus outside the search field to change categories while keeping your query. Modified arrows, such as Alt+Left/Right, retain their usual behavior. Category shortcuts are inactive inside modals.
+Left/Right switch categories even while typing in the search field, preserving your query and cursor position. Hold **Ctrl** while pressing Left/Right to move the search cursor one character instead (or collapse a selection to its left/right edge). Other modified arrows, such as Alt+Left/Right, retain their usual behavior. Category shortcuts are inactive inside modals.
 
 Press **Esc** to clear a query while keeping the category; press it again to return to **All**. Each page load starts on **All**. If editing, deleting, or importing bookmarks removes the selected category, the filter returns to **All** automatically.
 
@@ -86,14 +86,15 @@ Press **Esc** to clear a query while keeping the category; press it again to ret
 | Key | Action |
 |---|---|
 | `↑` / `↓` | Navigate through results |
-| `←` / `→` | Previous / next category (when search is empty or unfocused) |
+| `←` / `→` | Previous / next category, including while searching |
+| `Ctrl+←` / `Ctrl+→` | Move the cursor in the search field |
 | `↵` | Open highlighted bookmark |
 | `Shift+↵` or `Ctrl+Shift+↵` | Open in a new browsing context (tab/window depends on browser settings) |
 | `Esc` | Clear search, then reset category to All; close an open modal |
 | `Ctrl+Shift+A` | Add a new bookmark |
 | `Ctrl+Shift+E` | Edit the highlighted bookmark |
 
-Use **⌘** instead of **Ctrl** for the app's shortcuts on macOS. Hover over **? more shortcuts** for the expanded list, including the browser's **Ctrl/⌘+L** address-bar shortcut. When a category button has keyboard focus, Enter or Space activates that category.
+The app's **Ctrl** shortcuts also work on macOS. Hover over **? more shortcuts** for the expanded list. The address-bar shortcut is handled by your browser and may differ by platform. When a category button has keyboard focus, Enter or Space activates that category.
 
 ### Environment Color Coding
 

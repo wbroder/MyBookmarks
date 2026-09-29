@@ -1114,15 +1114,20 @@
 
   <div id="hint">
     <span class="hint-key" id="hint-navigate"><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-    <span class="hint-key" title="When search is empty or unfocused"><kbd>←</kbd><kbd>→</kbd> category</span>
-    <span class="hint-key" id="hint-open"><kbd>↵</kbd> open</span>
+    <span class="hint-key" title="Also works while typing in search"><kbd>←</kbd><kbd>→</kbd> category</span>
+    <span class="hint-key" id="hint-open"><kbd>Enter</kbd> open</span>
     <span class="hint-key" id="hint-more">
       <kbd>?</kbd> more shortcuts
       <div id="shortcuts-popup">
         <div class="shortcut-row">
-          <kbd>Ctrl/⌘</kbd><kbd>L</kbd>
+          <kbd>Ctrl</kbd><kbd>L</kbd>
           <span class="shortcut-dots"></span>
           <span class="shortcut-label">focus address bar</span>
+        </div>
+        <div class="shortcut-row">
+          <kbd>Ctrl</kbd><kbd>←</kbd><kbd>→</kbd>
+          <span class="shortcut-dots"></span>
+          <span class="shortcut-label">move search cursor</span>
         </div>
         <div class="shortcut-row">
           <kbd>Esc</kbd>
@@ -1130,22 +1135,22 @@
           <span class="shortcut-label">clear search, then category / close modal</span>
         </div>
         <div class="shortcut-row">
-          <kbd>⇧</kbd><kbd>↵</kbd>
+          <kbd>Shift</kbd><kbd>Enter</kbd>
           <span class="shortcut-dots"></span>
           <span class="shortcut-label">open in new window</span>
         </div>
         <div class="shortcut-row">
-          <kbd>Ctrl/⌘</kbd><kbd>⇧</kbd><kbd>↵</kbd>
+          <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Enter</kbd>
           <span class="shortcut-dots"></span>
           <span class="shortcut-label">open in new tab</span>
         </div>
         <div class="shortcut-row">
-          <kbd>Ctrl/⌘</kbd><kbd>⇧</kbd><kbd>A</kbd>
+          <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>A</kbd>
           <span class="shortcut-dots"></span>
           <span class="shortcut-label">add bookmark</span>
         </div>
         <div class="shortcut-row">
-          <kbd>Ctrl/⌘</kbd><kbd>⇧</kbd><kbd>E</kbd>
+          <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd>
           <span class="shortcut-dots"></span>
           <span class="shortcut-label">edit bookmark</span>
         </div>
@@ -2137,11 +2142,24 @@
       const ctrl  = e.ctrlKey  || e.metaKey;
       const shift = e.shiftKey;
 
-      // Preserve text editing and browser shortcuts; arrows filter elsewhere.
+      // Ctrl+Left/Right moves the search caret one character on every platform.
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && e.ctrlKey && !e.metaKey &&
+          !shift && !e.altKey && !e.isComposing && document.activeElement === searchInput) {
+        e.preventDefault();
+        const start = searchInput.selectionStart;
+        const end = searchInput.selectionEnd;
+        const position = e.key === 'ArrowLeft'
+          ? (start === end ? Math.max(0, start - 1) : start)
+          : (start === end ? Math.min(searchInput.value.length, end + 1) : end);
+        searchInput.setSelectionRange(position, position);
+        return;
+      }
+
+      // Plain arrows change categories even while the search field contains text.
       if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !ctrl && !shift && !e.altKey && !e.isComposing) {
         const focused = document.activeElement;
         const editingText = focused && (focused.isContentEditable || focused.matches('input, textarea, select'));
-        if (editingText && !(focused === searchInput && searchInput.value === '')) return;
+        if (editingText && focused !== searchInput) return;
         e.preventDefault();
         cycleCategory(e.key === 'ArrowRight' ? 1 : -1);
         return;

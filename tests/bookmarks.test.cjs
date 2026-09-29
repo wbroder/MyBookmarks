@@ -12,6 +12,8 @@ function app(options = {}) {
     constructor(tag = 'div') {
       this.tag = tag;
       this.value = '';
+      this.selectionStart = 0;
+      this.selectionEnd = 0;
       this.children = [];
       this.events = {};
       this.attributes = {};
@@ -47,6 +49,7 @@ function app(options = {}) {
         : selector.split(', ').includes(this.tag);
     }
     focus() { document.activeElement = this; }
+    setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
     blur() { document.activeElement = document.body; }
     click() { return this.events.click?.({ preventDefault() {} }); }
     scrollIntoView() {}
@@ -154,12 +157,17 @@ test('alphabetical navigation wraps, buttons select filters, and counts follow s
   assert.equal(a.document.activeElement.categoryKey, 'work');
 });
 
-test('queries intersect categories, preserve editing, and Escape resets in two steps', () => {
+test('arrows switch categories while searching, preserve the query/caret, and Escape resets in two steps', () => {
   const a = app();
   a.query('code');
-  for (const key of ['ArrowLeft', 'ArrowRight']) assert.equal(a.key(key).prevented, undefined);
+  a.elements.search.setSelectionRange(2, 2);
+  assert.equal(a.key('ArrowLeft').prevented, true);
+  assert.equal(a.state().selectedCategory, 'work');
+  assert.equal(a.key('ArrowRight').prevented, true);
   assert.equal(a.state().selectedCategory, null);
-  a.document.body.focus();
+  assert.equal(a.document.activeElement, a.elements.search);
+  assert.equal(a.elements.search.selectionStart, 2);
+  assert.equal(a.elements.search.selectionEnd, 2);
   a.key('ArrowRight');
   assert.equal(a.elements.search.value, 'code');
   assert.deepEqual(a.state().titles, []);
@@ -176,14 +184,54 @@ test('queries intersect categories, preserve editing, and Escape resets in two s
   assert.equal(a.state().selectedCategory, null);
 });
 
+test('Ctrl+arrows move the search caret and collapse selections without changing categories', () => {
+  const a = app();
+  a.query('code');
+  const search = a.elements.search;
+  search.setSelectionRange(2, 2);
+  assert.equal(a.key('ArrowLeft', { ctrlKey: true }).prevented, true);
+  assert.equal(search.selectionStart, 1);
+  assert.equal(a.key('ArrowRight', { ctrlKey: true }).prevented, true);
+  assert.equal(search.selectionStart, 2);
+  for (const [key, expected] of [['ArrowLeft', 1], ['ArrowRight', 3]]) {
+    search.setSelectionRange(1, 3);
+    a.key(key, { ctrlKey: true });
+    assert.equal(search.selectionStart, expected);
+    assert.equal(search.selectionEnd, expected);
+  }
+  search.setSelectionRange(0, 0);
+  a.key('ArrowLeft', { ctrlKey: true });
+  assert.equal(search.selectionStart, 0);
+  search.setSelectionRange(4, 4);
+  a.key('ArrowRight', { ctrlKey: true });
+  assert.equal(search.selectionStart, 4);
+  assert.equal(a.state().selectedCategory, null);
+  assert.equal(search.value, 'code');
+  a.query('');
+  search.setSelectionRange(0, 0);
+  a.key('ArrowRight', { ctrlKey: true });
+  assert.equal(search.selectionStart, 0);
+  a.document.body.focus();
+  assert.equal(a.key('ArrowLeft', { ctrlKey: true }).prevented, undefined);
+});
+
+test('shortcut helpers use Ctrl labels and include search cursor navigation', () => {
+  const hints = html.slice(html.indexOf('<div id="hint">'), html.indexOf('<div id="category-filters"'));
+  assert.doesNotMatch(hints, /⌘|⇧|↵|empty or unfocused/);
+  assert.match(hints, /<kbd>Shift<\/kbd><kbd>Enter<\/kbd>/);
+  assert.match(hints, /id="hint-open"><kbd>Enter<\/kbd>/);
+  assert.match(hints, /<kbd>Ctrl<\/kbd><kbd>←<\/kbd><kbd>→<\/kbd>[\s\S]*?move search cursor/);
+});
+
 test('modified arrows and modal input never switch categories or throw', () => {
   const a = app();
-  for (const modifier of ['altKey', 'ctrlKey', 'metaKey', 'shiftKey', 'isComposing']) {
+  for (const modifier of ['altKey', 'metaKey', 'shiftKey', 'isComposing']) {
     assert.equal(a.key('ArrowRight', { [modifier]: true }).prevented, undefined);
     assert.equal(a.state().selectedCategory, null);
   }
   a.elements['settings-overlay'].classList.add('open');
   assert.equal(a.key('ArrowRight').prevented, undefined);
+  assert.equal(a.key('ArrowLeft', { ctrlKey: true }).prevented, undefined);
   assert.equal(a.key('a').prevented, undefined);
   assert.equal(a.state().selectedCategory, null);
   a.key('Escape');
